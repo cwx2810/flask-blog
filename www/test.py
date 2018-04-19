@@ -1,29 +1,16 @@
-from orm import Model, StringField, IntegerField, create_pool
+import orm
+from models import User,Blog,Comment
 import asyncio
 
-class User(Model):
-    __table__ = 'users'
-
-    id = IntegerField(primary_key=True)
-    name = StringField()
-
-async def main(loop):
-    await create_pool(loop, **database)
-    user = User()
-    user.id = 123
-    user.name = 'Tony'
-    await user.save()
-    return user.name
 
 loop = asyncio.get_event_loop()
-database = {
-    'host':'127.0.0.1', #数据库的地址
-    'user':'root',
-    'password':'admin',
-    'db':'blog'
-}
 
-task = asyncio.ensure_future(main(loop))
+async def test():
+    #创建连接池,里面的host,port,user,password需要替换为自己数据库的信息
+    await orm.create_pool(loop=loop,host='127.0.0.1', port=3306,user='root', password='admin',db='blog')
+    #没有设置默认值的一个都不能少
+    u = User(name='Test', email='test@gmail.com', passwd='1234567890', image='about:blank',id="123")
+    await u.save()
 
-res = loop.run_until_complete(task)
-print(res)
+#把协程丢到事件循环中执行
+loop.run_until_complete(test())
