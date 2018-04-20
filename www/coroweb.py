@@ -93,7 +93,8 @@ class RequestHandler(object):
         self._named_kw_args = get_named_kw_args(fn)
         self._required_kw_args = get_required_kw_args(fn)
 
-    async def __call__(self, request):
+    @asyncio.coroutine
+    def __call__(self, request):
         # 定义kw，用于保存request中参数
         kw = None
         # 若URL处理函数有命名关键词或关键词参数
@@ -109,7 +110,7 @@ class RequestHandler(object):
                 # 如果contenttype字段以json格式数据开头
                 if ct.startswith('application/json'):
                     # 保存json数据，request.json()返回dict对象
-                    params = await request.json()
+                    params = yield from request.json()
                     # 如果不是dict，报错
                     if not isinstance(params, dict):
                         return web.HTTPBadRequest('JSON body must be object.')
@@ -118,7 +119,7 @@ class RequestHandler(object):
                 # 如果contenttype字段以form表单请求的编码形式开头
                 elif ct.startswith('application/x-www-form-urlencoded') or ct.startswith('multipart/form-data'):
                     # 保存post数据，dict-like对象。
-                    params = await request.post()
+                    params = yield from request.post()
                     # 组成dict，统一kw格式
                     kw = dict(**params)
                 else:
@@ -170,7 +171,7 @@ class RequestHandler(object):
         # request请求中的参数，终于全部传递给了URL处理函数
         logging.info('call with args: %s' % str(kw))
         try:
-            r = await self._func(**kw)
+            r = yield from self._func(**kw)
             return r
         except APIError as e:
             return dict(error=e.error, data=e.data, message=e.message)
