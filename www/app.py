@@ -12,6 +12,8 @@ from config import configs
 import orm
 from coroweb import add_routes, add_static
 
+from handlers import cookie2user, COOKIE_NAME
+
 
 # 初始化模板文件
 def init_jinja2(app, **kw):
@@ -59,6 +61,24 @@ def logger_factory(app, handler):
         # await asyncio.sleep(0.3)
         return (yield from handler(request))
     return logger
+
+#在处理URL之前把cookie拦截，解析出来，绑定到request，后续URL处理函数在response_factory可以直接拿到登录用户
+@asyncio.coroutine
+def auth_factory(app, handler):
+    @asyncio.coroutine
+    def auth(request):
+        logging.info('check user: %s %s' % (request.method, request.path))
+        request.__user__ = None
+        cookie_str = request.cookies.get(COOKIE_NAME)
+        if cookie_str:
+            user = yield from cookie2user(cookie_str)
+            if user:
+                logging.info('set current user: %s' % user.email)
+                request.__user__ = user
+        if request.path.startswith('/manage/') and (request.__user__ is None or not request.__user__.admin):
+            return web.HTTPFound('/signin')
+        return (yield from handler(request))
+    return auth
 
 @asyncio.coroutine
 def data_factory(app, handler):
@@ -115,6 +135,8 @@ def response_factory(app, handler):
                 return resp
             # 带模板信息，渲染模板
             else:
+                # 在此拿到绑定到request的用户
+                r['__user__'] = request.__user__
                 resp = web.Response(body=app['__templating__'].get_template(template).render(**r).encode('utf-8'))
                 # utf-8编码的html格式
                 resp.content_type = 'text/html;charset=utf-8'
@@ -156,7 +178,7 @@ def init(loop):
     # await orm.create_pool(loop=loop, host='127.0.0.1', port=3306, user='root', password='admin', db='blog')
     yield from orm.create_pool(loop=loop, **configs.db)
     # 创建一个Application实例，加入拦截器
-    app = web.Application(loop=loop, middlewares=[logger_factory, response_factory])
+    app = web.Application(loop=loop, middlewares=[logger_factory, auth_factory, response_factory])
     # 初始化jinjia2模板
     init_jinja2(app, filters=dict(datetime=datetime_filter))
     # 注册url处理函数，在handlers.py中定义映射路径
